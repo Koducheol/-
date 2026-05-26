@@ -1,0 +1,6 @@
+{
+  "name": "연수 신청 관리기",
+  "description": "구글 앱스 스크립트(GAS) 연동을 지원하는 단정하고 심플한 교사 연수 신청기 및 신청 내역 관리 대시보드",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

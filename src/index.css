@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Noto Sans KR", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Glassmorphism class helpers for absolute precision */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.glass-panel-dark {
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+}
+
+/* Floating animated background blobs */
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: translateY(-25px) scale(1.08);
+    filter: brightness(1.1);
+  }
+}
+
+@keyframes float-delay {
+  0%, 100% {
+    transform: translateY(0px) scale(1.1);
+    filter: brightness(1.05);
+  }
+  50% {
+    transform: translateY(20px) scale(0.95);
+    filter: brightness(0.95);
+  }
+}
+
+.animate-blob-1 {
+  animation: float-slow 18s infinite ease-in-out;
+}
+
+.animate-blob-2 {
+  animation: float-delay 22s infinite ease-in-out;
+}
+
+.animate-blob-3 {
+  animation: float-slow 26s infinite ease-in-out;
+}
+
+/* Custom scrollbars for a cleaner modern interface */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.16);
+}
