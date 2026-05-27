@@ -9,6 +9,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'submit' | 'gas'>('submit');
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [gasUrl, setGasUrl] = useState<string>('https://script.google.com/macros/s/AKfycbyqMxEZc0n5LUN9PiodFlc8rPDno05lalKIUqqwm8vRzuc_Y2_ONPyJq09FH1fTAnbBzg/exec');
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState<string>('https://docs.google.com/spreadsheets/d/1mUmgK0s-EjmpHbY7b0LDx1pp6XTa96WAesAG7oo2Syw/edit?usp=sharing');
   const [initializing, setInitializing] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -18,77 +19,180 @@ export default function App() {
   const [passcodeInput, setPasscodeInput] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
 
-  // Function to pull sheet records and keep local records in sync
-  const fetchSheetData = async (activeUrl: string) => {
-    if (!activeUrl) return;
-    setIsRefreshing(true);
+  // Extract spreadsheet ID from arbitrary Google Sheets URL
+  const extractSpreadsheetId = (url: string): string | null => {
+    if (!url) return null;
+    const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : null;
+  };
+
+  // Direct fetch from Google Sheet CSV Export - 100% CORS-friendly and universal across any hosting origin (e.g. Netlify)
+  const fetchViaCsv = async (sheetId: string): Promise<Registration[] | null> => {
     try {
-      const response = await fetch(`${activeUrl}${activeUrl.includes('?') ? '&' : '?'}cache_bust=${Date.now()}`, {
-        method: 'GET',
-        cache: 'no-store'
-      });
-      if (response.ok) {
-        const text = await response.text();
-        try {
-          const resJson = JSON.parse(text);
-          if (resJson && resJson.status === 'success' && Array.isArray(resJson.data)) {
-            const sheetRegs: Registration[] = resJson.data.map((row: any, index: number) => ({
-              id: row.id || `sheet-${index}-${row.neis || ''}`,
-              name: row.name || '미지정',
-              neis: row.neis || '미지정',
-              course: row.course || '미지정',
-              createdAt: row.createdAt || row.timestamp || new Date().toISOString(),
-              status: row.status || 'pending',
-              syncStatus: 'synced',
-            }));
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&cache_bust=${Date.now()}`;
+      const response = await fetch(csvUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error('구글 시트 CSV 데이터 fetch 실패');
+      
+      const text = await response.text();
+      if (!text || text.trim() === '') return null;
+      
+      const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+      if (lines.length <= 1) return []; // Header only
 
-            // Save and merge
-            const storedRegs = localStorage.getItem('training_registrations');
-            let localRegs: Registration[] = [];
-            if (storedRegs) {
-              localRegs = JSON.parse(storedRegs);
-            }
-
-            // Deduplicate to avoid repeating registrations on UI
-            const mergedMap = new Map<string, Registration>();
-            
-            // 1. Base on retrieved spreadsheet data (synced)
-            sheetRegs.forEach(item => {
-              const uniqueKey = `${item.name.trim()}_${item.neis.trim()}`;
-              mergedMap.set(uniqueKey, item);
-            });
-
-            // 2. Add local records that aren't synced yet or aren't in the sheet
-            localRegs.forEach(item => {
-              const uniqueKey = `${item.name.trim()}_${item.neis.trim()}`;
-              if (!mergedMap.has(uniqueKey)) {
-                mergedMap.set(uniqueKey, item);
-              } else if (item.syncStatus === 'local' || item.syncStatus === 'failed') {
-                const existing = mergedMap.get(uniqueKey)!;
-                mergedMap.set(uniqueKey, { ...existing, syncStatus: 'synced' });
-              }
-            });
-
-            const mergedList = Array.from(mergedMap.values());
-            mergedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-            setRegistrations(mergedList);
-            localStorage.setItem('training_registrations', JSON.stringify(mergedList));
+      const parsedRegs: Registration[] = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const columns: string[] = [];
+        let currentVal = '';
+        let insideQuotes = false;
+        
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          if (char === '"') {
+            insideQuotes = !insideQuotes;
+          } else if (char === ',' && !insideQuotes) {
+            columns.push(currentVal.trim());
+            currentVal = '';
+          } else {
+            currentVal += char;
           }
-        } catch (jsonErr) {
-          console.warn('구글 시트 응답 파싱 유의사항:', jsonErr);
+        }
+        columns.push(currentVal.trim());
+
+        // Column 0: Timestamp, Column 1: Name, Column 2: NEIS, Column 3: Course Product
+        const nameVal = columns[1];
+        const neisVal = columns[2];
+        const courseVal = columns[3] || '에듀테크 수업 디자인 연수 과정';
+        const timestampVal = columns[0];
+
+        if (nameVal && neisVal && nameVal !== '이름' && neisVal !== '나이스번호') {
+          let isoTimestamp = new Date().toISOString();
+          if (timestampVal) {
+            try {
+              const cleanTs = timestampVal.replace(/"/g, '');
+              const parsedDate = new Date(cleanTs);
+              if (!isNaN(parsedDate.getTime())) {
+                isoTimestamp = parsedDate.toISOString();
+              } else {
+                // Parse Korean format representation in browser
+                const cleanedKDate = cleanTs
+                  .replace(/\./g, '-')
+                  .replace(/\s+/g, ' ')
+                  .replace(/오후 ([0-9]+)/, (_, hour) => `${parseInt(hour) + 12}`)
+                  .replace(/오전 ([0-9]+)/, (_, hour) => `${hour.padStart(2, '0')}`);
+                const tryKDate = new Date(cleanedKDate);
+                if (!isNaN(tryKDate.getTime())) {
+                  isoTimestamp = tryKDate.toISOString();
+                }
+              }
+            } catch (e) {
+              console.warn('날짜 파싱 무시:', e);
+            }
+          }
+
+          parsedRegs.push({
+            id: `sheet-${i}-${neisVal}`,
+            name: nameVal,
+            neis: neisVal,
+            course: courseVal,
+            createdAt: isoTimestamp,
+            status: 'pending',
+            syncStatus: 'synced',
+          });
         }
       }
-    } catch (e) {
-      console.error('구글 스프레드시트 실시간 데이터 조회 실패:', e);
-    } finally {
-      setIsRefreshing(false);
+      return parsedRegs;
+    } catch (err) {
+      console.error('구글 시트 Direct CSV 연동 실패 (일반 조회용):', err);
+      return null;
     }
+  };
+
+  // Function to pull sheet records and keep local records in sync (Double safety Mechanism)
+  const fetchSheetData = async (activeGasUrl: string, activeSpreadsheetUrl: string) => {
+    setIsRefreshing(true);
+    let sheetRegs: Registration[] | null = null;
+
+    // Method 1: Client-Side Direct Google Sheet CSV Export (Runs anywhere, perfectly handles CORS globally!)
+    const spreadsheetId = extractSpreadsheetId(activeSpreadsheetUrl);
+    if (spreadsheetId) {
+      sheetRegs = await fetchViaCsv(spreadsheetId);
+    }
+
+    // Method 2: Fallback to Apps Script doGet Web App configuration if Method 1 retrieves nothing or Spreadsheet is private
+    if (!sheetRegs && activeGasUrl) {
+      try {
+        const response = await fetch(`${activeGasUrl}${activeGasUrl.includes('?') ? '&' : '?'}cache_bust=${Date.now()}`, {
+          method: 'GET',
+          cache: 'no-store'
+        });
+        if (response.ok) {
+          const text = await response.text();
+          try {
+            const resJson = JSON.parse(text);
+            if (resJson && resJson.status === 'success' && Array.isArray(resJson.data)) {
+              sheetRegs = resJson.data.map((row: any, index: number) => ({
+                id: row.id || `sheet-${index}-${row.neis || ''}`,
+                name: row.name || '미지정',
+                neis: row.neis || '미지정',
+                course: row.course || '미지정',
+                createdAt: row.createdAt || row.timestamp || new Date().toISOString(),
+                status: row.status || 'pending',
+                syncStatus: 'synced',
+              }));
+            }
+          } catch (jsonErr) {
+            console.warn('GAS doGet fallback parsing issue:', jsonErr);
+          }
+        }
+      } catch (e) {
+        console.error('구글 스프레드시트 GAS 원격 조회 실패:', e);
+      }
+    }
+
+    // Process synchronization merge
+    if (sheetRegs) {
+      const storedRegs = localStorage.getItem('training_registrations');
+      let localRegs: Registration[] = [];
+      if (storedRegs) {
+        try {
+          localRegs = JSON.parse(storedRegs);
+        } catch (_) {}
+      }
+
+      const mergedMap = new Map<string, Registration>();
+      
+      // 1. Core Base: Synced spreadsheet entries
+      sheetRegs.forEach(item => {
+        const uniqueKey = `${item.name.trim()}_${item.neis.trim()}`;
+        mergedMap.set(uniqueKey, item);
+      });
+
+      // 2. Client Side Buffer: Unsubmitted/Local unsynced entries
+      localRegs.forEach(item => {
+        const uniqueKey = `${item.name.trim()}_${item.neis.trim()}`;
+        if (!mergedMap.has(uniqueKey)) {
+          mergedMap.set(uniqueKey, item);
+        } else if (item.syncStatus === 'local' || item.syncStatus === 'failed') {
+          const existing = mergedMap.get(uniqueKey)!;
+          mergedMap.set(uniqueKey, { ...existing, syncStatus: 'synced' });
+        }
+      });
+
+      const mergedList = Array.from(mergedMap.values());
+      mergedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      setRegistrations(mergedList);
+      localStorage.setItem('training_registrations', JSON.stringify(mergedList));
+    }
+    setIsRefreshing(false);
   };
 
   // Load initial data from localStorage
   useEffect(() => {
     let activeGasUrl = 'https://script.google.com/macros/s/AKfycbyqMxEZc0n5LUN9PiodFlc8rPDno05lalKIUqqwm8vRzuc_Y2_ONPyJq09FH1fTAnbBzg/exec';
+    let activeSpreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1mUmgK0s-EjmpHbY7b0LDx1pp6XTa96WAesAG7oo2Syw/edit?usp=sharing';
     
     try {
       const storedRegs = localStorage.getItem('training_registrations');
@@ -104,6 +208,15 @@ export default function App() {
         setGasUrl(activeGasUrl);
         localStorage.setItem('training_gas_url', activeGasUrl);
       }
+
+      const storedSpreadsheetUrl = localStorage.getItem('training_spreadsheet_url');
+      if (storedSpreadsheetUrl) {
+        activeSpreadsheetUrl = storedSpreadsheetUrl;
+        setSpreadsheetUrl(storedSpreadsheetUrl);
+      } else {
+        setSpreadsheetUrl(activeSpreadsheetUrl);
+        localStorage.setItem('training_spreadsheet_url', activeSpreadsheetUrl);
+      }
     } catch (e) {
       console.error('로컬 데이터 복원 과정 실패:', e);
     } finally {
@@ -111,7 +224,7 @@ export default function App() {
     }
 
     // Dynamic initial background fetch
-    fetchSheetData(activeGasUrl);
+    fetchSheetData(activeGasUrl, activeSpreadsheetUrl);
   }, []);
 
   // Save registrations to localStorage on update
@@ -124,6 +237,14 @@ export default function App() {
   const handleSaveGasUrl = (url: string) => {
     setGasUrl(url);
     localStorage.setItem('training_gas_url', url);
+  };
+
+  // Handle saving Spreadsheet URL
+  const handleSaveSpreadsheetUrl = (url: string) => {
+    setSpreadsheetUrl(url);
+    localStorage.setItem('training_spreadsheet_url', url);
+    // Trigger deep pull immediately
+    fetchSheetData(gasUrl, url);
   };
 
   // Helper: POST registration to Google Apps Script Web App
@@ -180,7 +301,7 @@ export default function App() {
     // Auto-refresh sheet list dynamically short after posting success
     if (gasUrl) {
       setTimeout(() => {
-        fetchSheetData(gasUrl);
+        fetchSheetData(gasUrl, spreadsheetUrl);
       }, 1500);
     }
     
@@ -281,7 +402,7 @@ export default function App() {
                 gasUrl={gasUrl} 
                 onRegisterSubmit={handleRegisterSubmit} 
                 registrationCount={registrations.length} 
-                onRefresh={() => fetchSheetData(gasUrl)}
+                onRefresh={() => fetchSheetData(gasUrl, spreadsheetUrl)}
                 isRefreshing={isRefreshing}
               />
             </div>
@@ -293,6 +414,8 @@ export default function App() {
               registrations={registrations}
               gasUrl={gasUrl}
               onSaveGasUrl={handleSaveGasUrl}
+              spreadsheetUrl={spreadsheetUrl}
+              onSaveSpreadsheetUrl={handleSaveSpreadsheetUrl}
               onDeleteRegistration={handleDeleteRegistration}
               onSyncAllToGas={handleSyncAllToGas}
               onUpdateStatus={handleUpdateStatus}

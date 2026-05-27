@@ -23,6 +23,8 @@ interface AdminDashboardProps {
   registrations: Registration[];
   gasUrl: string;
   onSaveGasUrl: (url: string) => void;
+  spreadsheetUrl: string;
+  onSaveSpreadsheetUrl: (url: string) => void;
   onDeleteRegistration: (id: string) => void;
   onSyncAllToGas: () => Promise<{ success: number; failed: number }>;
   onUpdateStatus: (id: string, status: Registration['status']) => void;
@@ -33,6 +35,8 @@ export default function AdminDashboard({
   registrations,
   gasUrl,
   onSaveGasUrl,
+  spreadsheetUrl,
+  onSaveSpreadsheetUrl,
   onDeleteRegistration,
   onSyncAllToGas,
   onUpdateStatus,
@@ -299,7 +303,12 @@ export default function AdminDashboard({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
           >
-            <GasGuide gasUrl={gasUrl} onSaveGasUrl={onSaveGasUrl} />
+            <GasGuide 
+              gasUrl={gasUrl} 
+              onSaveGasUrl={onSaveGasUrl} 
+              spreadsheetUrl={spreadsheetUrl}
+              onSaveSpreadsheetUrl={onSaveSpreadsheetUrl}
+            />
           </motion.div>
         )}
       </AnimatePresence>

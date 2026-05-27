@@ -5,10 +5,18 @@ import { Copy, Check, FileSpreadsheet, ExternalLink, Settings, Terminal, ShieldA
 interface GasGuideProps {
   gasUrl: string;
   onSaveGasUrl: (url: string) => void;
+  spreadsheetUrl: string;
+  onSaveSpreadsheetUrl: (url: string) => void;
 }
 
-export default function GasGuide({ gasUrl, onSaveGasUrl }: GasGuideProps) {
+export default function GasGuide({ 
+  gasUrl, 
+  onSaveGasUrl,
+  spreadsheetUrl,
+  onSaveSpreadsheetUrl 
+}: GasGuideProps) {
   const [urlInput, setUrlInput] = useState(gasUrl);
+  const [sheetInput, setSheetInput] = useState(spreadsheetUrl);
   const [copied, setCopied] = useState(false);
   const [verified, setVerified] = useState(false);
 
@@ -125,9 +133,10 @@ function doPost(e) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSaveUrl = (e: React.FormEvent) => {
+  const handleSaveConfigs = (e: React.FormEvent) => {
     e.preventDefault();
     onSaveGasUrl(urlInput.trim());
+    onSaveSpreadsheetUrl(sheetInput.trim());
     setVerified(true);
     setTimeout(() => setVerified(false), 2000);
   };
@@ -147,10 +156,28 @@ function doPost(e) {
             </div>
           </div>
 
-          <form onSubmit={handleSaveUrl} className="space-y-4" id="gas-url-setup-form">
+          <form onSubmit={handleSaveConfigs} className="space-y-5" id="gas-url-setup-form">
             <div className="space-y-2">
-              <label htmlFor="gas-url-input" className="text-[10.5px] font-extrabold text-slate-600 pl-0.5">
-                배포 완료된 Web App 주소 (URL)
+              <label htmlFor="spreadsheet-url-input" className="text-[10.5px] font-black text-slate-700 pl-0.5">
+                구글 스프레드시트 공유 주소 (URL) <span className="text-rose-500">*실시간 동기화 필수</span>
+              </label>
+              <input
+                type="url"
+                id="spreadsheet-url-input"
+                placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                value={sheetInput}
+                onChange={(e) => setSheetInput(e.target.value)}
+                className="w-full px-3.5 py-2.5 glass-input text-xs rounded-xl outline-none transition-all text-slate-700 font-bold"
+                required
+              />
+              <p className="text-[9.5px] text-slate-400 leading-normal pl-0.5 font-semibold">
+                스프레드시트는 <strong>'링크가 있는 모든 교사(사용자)가 뷰어 또는 편집 가능'</strong>하도록 설정해야 모든 사용자가 즉시 실시간 집계를 볼 수 있습니다.
+              </p>
+            </div>
+
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <label htmlFor="gas-url-input" className="text-[10.5px] font-black text-slate-700 pl-0.5">
+                배포 완료된 Web App 주소 (GAS URL)
               </label>
               <input
                 type="url"
@@ -160,8 +187,8 @@ function doPost(e) {
                 onChange={(e) => setUrlInput(e.target.value)}
                 className="w-full px-3.5 py-2.5 glass-input text-xs rounded-xl outline-none transition-all text-slate-705 font-bold"
               />
-              <p className="text-[10px] text-slate-400 leading-normal pl-0.5 font-semibold">
-                안정적인 수신을 위해 액세스 수준을 <strong>'모든 사람(Anyone)'</strong>으로 배포해야 정상 작동합니다.
+              <p className="text-[9.5px] text-slate-400 leading-normal pl-0.5 font-semibold">
+                안정적인 신청 수신을 위해 액세스 수준을 <strong>'모든 사람(Anyone)'</strong>으로 배포해야 완벽히 저장됩니다.
               </p>
             </div>
 
@@ -170,17 +197,18 @@ function doPost(e) {
               className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
             >
               {verified ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : null}
-              {verified ? '구글 연동 저장 완료' : '스프레드시트 활성 저장'}
+              {verified ? '구글 연동 저장 완료' : '스프레드시트 및 Web App 설정 저장'}
             </button>
           </form>
 
-          {gasUrl ? (
+          {gasUrl || spreadsheetUrl ? (
             <div className="mt-5 p-4 bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-800 rounded-xl space-y-1.5 font-bold leading-relaxed shadow-inner">
               <div className="font-extrabold flex items-center gap-1.5 text-emerald-700">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-550 animate-pulse" />
                 <span>스마트 연수 실시간 연동 활성화</span>
               </div>
-              <p className="text-slate-500 truncate font-mono text-[9.5px] font-semibold">URL: {gasUrl}</p>
+              {spreadsheetUrl && <p className="text-slate-500 truncate font-mono text-[9px] font-semibold">Sheet: {spreadsheetUrl}</p>}
+              {gasUrl && <p className="text-slate-500 truncate font-mono text-[9px] font-semibold">GAS: {gasUrl}</p>}
             </div>
           ) : (
             <div className="mt-5 p-4 bg-slate-900/[0.03] border border-white/50 text-[11px] text-slate-500 rounded-xl leading-relaxed font-semibold">
