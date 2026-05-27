@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, KeyRound, CheckCircle2, ChevronRight, Loader2, AlertCircle, Calendar, Clock, MapPin, Sparkles } from 'lucide-react';
+import { User, KeyRound, CheckCircle2, ChevronRight, Loader2, AlertCircle, Calendar, Clock, MapPin, Sparkles, RefreshCw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Registration, TARGET_COURSE } from '../types';
 
@@ -8,9 +8,17 @@ interface RegistrationFormProps {
   gasUrl: string;
   onRegisterSubmit: (data: Omit<Registration, 'id' | 'createdAt' | 'status' | 'syncStatus'>) => Promise<boolean>;
   registrationCount: number;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
-export default function RegistrationForm({ gasUrl, onRegisterSubmit, registrationCount }: RegistrationFormProps) {
+export default function RegistrationForm({ 
+  gasUrl, 
+  onRegisterSubmit, 
+  registrationCount,
+  onRefresh,
+  isRefreshing
+}: RegistrationFormProps) {
   const [name, setName] = useState('');
   const [neis, setNeis] = useState('');
   
@@ -100,11 +108,26 @@ export default function RegistrationForm({ gasUrl, onRegisterSubmit, registratio
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
-          {/* Floating Registration Count */}
+          {/* Floating Registration Count with Refresh trigger */}
           <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
-            <div className="flex items-center gap-1.5 text-[10.5px] sm:text-[11px] font-black text-indigo-900 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-white/40">
-              <User className="w-3.5 h-3.5 text-indigo-600" />
-              현재 {registrationCount}명 신청 중
+            <div className="flex items-center gap-1.5 text-[10.5px] sm:text-[11px] font-black text-indigo-900 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full shadow-lg border border-white/40">
+              <User className={`w-3.5 h-3.5 text-indigo-600 ${isRefreshing ? 'animate-bounce' : ''}`} />
+              <span>현재 {registrationCount}명 신청 중</span>
+              {onRefresh && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRefresh();
+                  }}
+                  disabled={isRefreshing}
+                  className="p-1 -mr-1 rounded-full hover:bg-indigo-50 active:scale-90 transition-all text-indigo-500 disabled:opacity-50"
+                  title="신청 현황 실시간 동기화"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </button>
+              )}
             </div>
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 via-slate-900/10 to-transparent flex items-end p-5 pointer-events-none">

@@ -15,54 +15,107 @@ export default function GasGuide({ gasUrl, onSaveGasUrl }: GasGuideProps) {
   // Updated modern Google Apps Script code (removed phone)
   const appsScriptCode = `/**
  * 교사 연수 신청서 구글 스프레드시트 연동용 Apps Script
- * 업데이트: 2026-05-21 (연락처 필드 제거 버전)
+ * 업데이트: 2026-05-27 (지능적 중복 방지 및 실시간 GET 조회 통합본)
  */
 
+// 1. 실시간 신청자 명단 조회 (GET) - PC, 모바일 기기 간 카운터 동기화 지원
+function doGet(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = sheet.getDataRange().getValues();
+    var list = [];
+    
+    // 첫 행(헤더)을 제외하고 데이터 추출
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[1]) continue; // 교사명 필드가 없으면 스킵
+      
+      var timestampStr = "";
+      if (row[0] instanceof Date) {
+        timestampStr = row[0].toISOString();
+      } else if (row[0]) {
+        timestampStr = new Date(row[0]).toISOString();
+      } else {
+        timestampStr = new Date().toISOString();
+      }
+
+      list.push({
+        id: "sheet-" + i + "-" + String(row[2]).trim(),
+        name: String(row[1]).trim(),
+        neis: String(row[2]).trim(),
+        course: String(row[3]).trim(),
+        createdAt: timestampStr,
+        status: "pending",
+        syncStatus: "synced"
+      });
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "success", 
+      data: list 
+    }))
+    .setMimeType(ContentService.MimeType.JSON);
+    
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "error", 
+      message: err.toString() 
+    }))
+    .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// 2. 실시간 연수 신청 기록 (POST) - 교사명 & 나이스 고유번호 이용한 이중 등록 차단 기능 내장
 function doPost(e) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     var data = JSON.parse(e.postData.contents);
     
-    // 데이터 추출 (수신 시각, 신청자명, 나이스 고유번호, 신청 과정명)
     var timestamp = new Date();
-    var name = data.name || "미지정";
-    var neis = data.neis || "미지정";
-    var course = data.course || "미지정";
+    var name = (data.name || "").toString().trim();
+    var neis = (data.neis || "").toString().trim();
+    var course = (data.course || "").toString().trim();
     
-    // 스프레드시트 맨 마지막 줄 뒤에 4개 열 데이터 추가
-    sheet.appendRow([
-      timestamp, 
-      name, 
-      neis, 
-      course
-    ]);
+    if (!name || !neis) {
+      throw new Error("필수 입력 값이 누락되었습니다.");
+    }
+
+    var values = sheet.getDataRange().getValues();
+    var exists = false;
+    var rowIdx = -1;
     
-    // 성공 시 JSON 응답 전송 (CORS 오리진 헤더 추가)
+    // 이중 등록 방지 (이름과 나이스 고유번호 일치 감지)
+    for (var i = 1; i < values.length; i++) {
+      var rowName = String(values[i][1]).trim();
+      var rowNeis = String(values[i][2]).trim();
+      if (rowName === name && rowNeis === neis) {
+        exists = true;
+        rowIdx = i + 1;
+        break;
+      }
+    }
+    
+    if (exists) {
+      // 이미 신청된 경우, 최근 신청 시각 포함 정보 최신화
+      sheet.getRange(rowIdx, 1, 1, 4).setValues([[timestamp, name, neis, course]]);
+    } else {
+      // 새로운 신청인 경우 행 추가
+      sheet.appendRow([timestamp, name, neis, course]);
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({ 
       status: "success", 
       message: "연수 신청이 정상적으로 기록되었습니다." 
     }))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader("Access-Control-Allow-Origin", "*");
+    .setMimeType(ContentService.MimeType.JSON);
     
   } catch(err) {
-    // 에러 리턴
     return ContentService.createTextOutput(JSON.stringify({ 
       status: "error", 
       message: err.toString() 
     }))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader("Access-Control-Allow-Origin", "*");
+    .setMimeType(ContentService.MimeType.JSON);
   }
-}
-
-// CORS 사전 점검(Preflight) 요청 완벽 처리
-function doOptions(e) {
-  return ContentService.createTextOutput("")
-    .setMimeType(ContentService.MimeType.TEXT)
-    .setHeader("Access-Control-Allow-Origin", "*")
-    .setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-    .setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 `;
 

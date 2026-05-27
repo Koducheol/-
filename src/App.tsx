@@ -8,8 +8,9 @@ import AdminDashboard from './components/AdminDashboard';
 export default function App() {
   const [activeTab, setActiveTab] = useState<'submit' | 'gas'>('submit');
   const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const [gasUrl, setGasUrl] = useState<string>('https://script.google.com/macros/s/AKfycbye-2HG2MGCU7jgH_M1g7GIQC86AVlZhjm7dcXCM5ens5FsF-qeSS60tSBfGCvqFeDWQg/exec');
+  const [gasUrl, setGasUrl] = useState<string>('https://script.google.com/macros/s/AKfycbyqMxEZc0n5LUN9PiodFlc8rPDno05lalKIUqqwm8vRzuc_Y2_ONPyJq09FH1fTAnbBzg/exec');
   const [initializing, setInitializing] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Admin access protection states
   const [adminUnlocked, setAdminUnlocked] = useState(false);
@@ -17,8 +18,78 @@ export default function App() {
   const [passcodeInput, setPasscodeInput] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
 
+  // Function to pull sheet records and keep local records in sync
+  const fetchSheetData = async (activeUrl: string) => {
+    if (!activeUrl) return;
+    setIsRefreshing(true);
+    try {
+      const response = await fetch(`${activeUrl}${activeUrl.includes('?') ? '&' : '?'}cache_bust=${Date.now()}`, {
+        method: 'GET',
+        cache: 'no-store'
+      });
+      if (response.ok) {
+        const text = await response.text();
+        try {
+          const resJson = JSON.parse(text);
+          if (resJson && resJson.status === 'success' && Array.isArray(resJson.data)) {
+            const sheetRegs: Registration[] = resJson.data.map((row: any, index: number) => ({
+              id: row.id || `sheet-${index}-${row.neis || ''}`,
+              name: row.name || '미지정',
+              neis: row.neis || '미지정',
+              course: row.course || '미지정',
+              createdAt: row.createdAt || row.timestamp || new Date().toISOString(),
+              status: row.status || 'pending',
+              syncStatus: 'synced',
+            }));
+
+            // Save and merge
+            const storedRegs = localStorage.getItem('training_registrations');
+            let localRegs: Registration[] = [];
+            if (storedRegs) {
+              localRegs = JSON.parse(storedRegs);
+            }
+
+            // Deduplicate to avoid repeating registrations on UI
+            const mergedMap = new Map<string, Registration>();
+            
+            // 1. Base on retrieved spreadsheet data (synced)
+            sheetRegs.forEach(item => {
+              const uniqueKey = `${item.name.trim()}_${item.neis.trim()}`;
+              mergedMap.set(uniqueKey, item);
+            });
+
+            // 2. Add local records that aren't synced yet or aren't in the sheet
+            localRegs.forEach(item => {
+              const uniqueKey = `${item.name.trim()}_${item.neis.trim()}`;
+              if (!mergedMap.has(uniqueKey)) {
+                mergedMap.set(uniqueKey, item);
+              } else if (item.syncStatus === 'local' || item.syncStatus === 'failed') {
+                const existing = mergedMap.get(uniqueKey)!;
+                mergedMap.set(uniqueKey, { ...existing, syncStatus: 'synced' });
+              }
+            });
+
+            const mergedList = Array.from(mergedMap.values());
+            mergedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+            setRegistrations(mergedList);
+            localStorage.setItem('training_registrations', JSON.stringify(mergedList));
+          }
+        } catch (jsonErr) {
+          console.warn('구글 시트 응답 파싱 유의사항:', jsonErr);
+        }
+      }
+    } catch (e) {
+      console.error('구글 스프레드시트 실시간 데이터 조회 실패:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Load initial data from localStorage
   useEffect(() => {
+    let activeGasUrl = 'https://script.google.com/macros/s/AKfycbyqMxEZc0n5LUN9PiodFlc8rPDno05lalKIUqqwm8vRzuc_Y2_ONPyJq09FH1fTAnbBzg/exec';
+    
     try {
       const storedRegs = localStorage.getItem('training_registrations');
       if (storedRegs) {
@@ -27,15 +98,20 @@ export default function App() {
 
       const storedGasUrl = localStorage.getItem('training_gas_url');
       if (storedGasUrl) {
+        activeGasUrl = storedGasUrl;
         setGasUrl(storedGasUrl);
       } else {
-        localStorage.setItem('training_gas_url', 'https://script.google.com/macros/s/AKfycbye-2HG2MGCU7jgH_M1g7GIQC86AVlZhjm7dcXCM5ens5FsF-qeSS60tSBfGCvqFeDWQg/exec');
+        setGasUrl(activeGasUrl);
+        localStorage.setItem('training_gas_url', activeGasUrl);
       }
     } catch (e) {
       console.error('로컬 데이터 복원 과정 실패:', e);
     } finally {
       setInitializing(false);
     }
+
+    // Dynamic initial background fetch
+    fetchSheetData(activeGasUrl);
   }, []);
 
   // Save registrations to localStorage on update
@@ -100,6 +176,14 @@ export default function App() {
 
     const updated = [newReg, ...registrations];
     saveRegistrations(updated);
+    
+    // Auto-refresh sheet list dynamically short after posting success
+    if (gasUrl) {
+      setTimeout(() => {
+        fetchSheetData(gasUrl);
+      }, 1500);
+    }
+    
     return isSynced;
   };
 
@@ -197,6 +281,8 @@ export default function App() {
                 gasUrl={gasUrl} 
                 onRegisterSubmit={handleRegisterSubmit} 
                 registrationCount={registrations.length} 
+                onRefresh={() => fetchSheetData(gasUrl)}
+                isRefreshing={isRefreshing}
               />
             </div>
           )}
