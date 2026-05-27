@@ -16,6 +16,7 @@ export interface CourseSchedule {
 
 export interface Course {
   title: string;
+  subTitle?: string;
   period: string;
   time: string;
   hours: number;
@@ -25,6 +26,7 @@ export interface Course {
 
 export const TARGET_COURSE: Course = {
   title: "생성형 AI 에이전트와 함께하는\n에듀테크 수업디자인",
+  subTitle: "특수분야 직무연수 15차시 과정",
   period: "2026. 6. 10. ~ 10. 21. (총 5회)",
   time: "15시간 (1회 3시간)",
   hours: 15,
@@ -43,7 +45,7 @@ export const TARGET_COURSE: Course = {
     {
       date: "7월 8일(수)",
       topic: "사회, 창제 수업 적용\n이론·실습",
-      activity: "에듀테크(슈퍼 앱)로 바꾸는 경제교육 교실\n(내부 강사 - 권민수)"
+      activity: "에듀테크(슈페 앱)로 바꾸는 경제교육 교실\n(내부 강사 - 권민수)"
     },
     {
       date: "9월 30일(수)",
@@ -52,8 +54,8 @@ export const TARGET_COURSE: Course = {
     },
     {
       date: "10월 14일(수)",
-      topic: "체육 에듀테크\n실습",
-      activity: "Active Arcade, 메타스포츠스쿨 체육 에듀테크 실습\n(내부 강사 - 김재근)"
+      topic: "체육 수업 적용\n에듀테크 강의•실습",
+      activity: "세부 내용에 Active Arcade, 메타스포츠스쿨 등 체육 앱 활용 수업 들여다보기\n(내부 강사 - 김재근)"
     }
   ]
 };

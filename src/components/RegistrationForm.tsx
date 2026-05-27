@@ -115,10 +115,15 @@ export default function RegistrationForm({ gasUrl, onRegisterSubmit, registratio
         </div>
 
         <div className="mb-7">
-          <div className="bg-white/50 border border-white/80 rounded-2xl py-6 px-4 flex flex-col items-center justify-center text-center shadow-[0_4px_20px_rgba(31,38,135,0.03)] font-sans">
+          <div className="bg-white/50 border border-white/80 rounded-2xl py-6 px-4 flex flex-col items-center justify-center text-center shadow-[0_4px_20px_rgba(31,38,135,0.03)] font-sans gap-2">
             <h3 className="text-xl sm:text-2xl lg:text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-500 bg-clip-text text-transparent leading-snug whitespace-pre-wrap">
               {TARGET_COURSE.title}
             </h3>
+            {TARGET_COURSE.subTitle && (
+              <p className="text-sm sm:text-base font-extrabold text-blue-600/90 border-t border-slate-200/50 w-full pt-3 mt-1.5 leading-normal tracking-tight">
+                {TARGET_COURSE.subTitle}
+              </p>
+            )}
           </div>
         </div>
 
@@ -257,7 +262,14 @@ export default function RegistrationForm({ gasUrl, onRegisterSubmit, registratio
               
               <div className="bg-slate-900/5 hover:bg-slate-900/10 transition-colors p-4 rounded-2xl text-left border border-white/50 space-y-1 my-4">
                 <span className="text-[10px] text-indigo-600 font-extrabold uppercase tracking-wider block">신청 완료 과목</span>
-                <p className="text-xs font-bold text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">{TARGET_COURSE.title}</p>
+                <p className="text-xs font-bold text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+                  {TARGET_COURSE.title}
+                  {TARGET_COURSE.subTitle && (
+                    <span className="block text-[11px] text-blue-600 font-extrabold mt-1">
+                      ({TARGET_COURSE.subTitle})
+                    </span>
+                  )}
+                </p>
               </div>
 
               <p className="text-slate-500 text-xs leading-relaxed max-w-sm mx-auto mb-6">
